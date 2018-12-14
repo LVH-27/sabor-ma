@@ -2,6 +2,7 @@
 import wikipedia
 
 
+wikipedia.set_lang("hr")
 titles = ["Hrvatski sabor",
           "Domovinski rat",
           "Hrvatska demokratska zajednica",
