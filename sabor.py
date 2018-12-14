@@ -1,15 +1,21 @@
 #!/usr/bin/python2
+# -*- coding: utf-8 -*- 
 
 import cPickle, string, numpy, getopt, sys, random, time, re, pprint
 import onlineldavb
 
-def main():
-	batch_size = 64
-	topic_number = 80
 
-	documents_to_analyze = sys.argv[1]
-	dataset_csv = sys.argv[2]
+batch_size = 64
+topic_number = 80
 
-	documents = []
-	with open(dataset_csv, 'r') as f:
-		
+no_of_docs_to_analyze = int(sys.argv[1])
+dataset_csv = sys.argv[2]
+
+documents = []
+with open(dataset_csv, 'r') as f:
+	for i in range(no_of_docs_to_analyze):
+		line = f.read().split(';')
+		documents.append(line[1])  # fetch only the transcript
+for document in documents:
+	print(document)
+	
