@@ -1,11 +1,11 @@
-#!/usr/bin/python2
+#!/usr/bin/python
 import wikipedia
 
 
 titles = ["Hrvatski sabor",
           "Domovinski rat",
           "Hrvatska demokratska zajednica",
-          "Socijal-demokratska partija Hrvatske",
+          "Socijaldemokratska partija Hrvatske",
           "Europska unija",
           "Recesija",
           "Inflacija"
