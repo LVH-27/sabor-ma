@@ -23,4 +23,4 @@ with open("cro_vocab.txt", "w") as f:
                 tokens.append(term.split('.')[0])
 
         for token in tokens:
-            f.writeline(token + '\n')
+            f.write(token + '\n')
