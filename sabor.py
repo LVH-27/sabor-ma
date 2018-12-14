@@ -13,8 +13,9 @@ dataset_csv = sys.argv[2]
 
 documents = []
 with open(dataset_csv, 'r') as f:
+	f.readline()  # read the header to get rid of it
 	for i in range(no_of_docs_to_analyze):
-		line = f.read().split(';')
+		line = f.readline().split(';')
 		documents.append(line[1])  # fetch only the transcript
 for document in documents:
 	print(document)
