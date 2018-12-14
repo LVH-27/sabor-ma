@@ -20,7 +20,7 @@ with open("cro_vocab.txt", "w") as f:
         tokens = []
         for term in summary:
             if "http" not in term:
-                tokens.append(term.split('.')[0])
+                tokens.append(term.split('.')[0].split(',')[0].split('(')[1].split(')')[0].split(':')[0])
 
         for token in tokens:
             f.write(token + '\n')
