@@ -1,41 +1,130 @@
 #!/usr/bin/python2
-# -*- coding: utf-8 -*- 
+# -*- coding: utf-8 -*-
 
-import cPickle, string, numpy, getopt, sys, random, time, re, pprint
-import onlineldavb
+import sys
+import os
+import re
+import croatian_stemmer as cro_stem
+import pickle
+# import onlineldavb
+# import random
+# import time
+# import pprint
+# import string
+# import numpy
+# import getopt
+
+
+usage = """
+This script performs LDA on Croatian Parliament discussion transcripts. Usage:\n
+\tpython {} dataset_csv_directory [number of documents to analyze] [croatian vocabulary file]
+""".format(sys.argv[0])
+
+
+def get_corpus_csvs(dataset_dir):
+    transcript_csvs = []
+    for f in os.listdir(dataset_dir):
+        # fetch only transcripts, not discussion descriptions - that will come later
+        if re.search("\.csv$", f):
+            transcript_csvs.append(os.path.join(dataset_dir, f))
+    return transcript_csvs
+
+
+def get_corpus_size(corpus):
+    size = 0
+    for csv in corpus:
+        with open(csv, 'r') as f:
+            size += len(f.readlines()) - 1  # all lines minus the header
+    return size
 
 
 batch_size = 64
-topic_number = 80
+topic_number = 15
+pickle_dir = 'pickles'
 
-no_of_docs_to_analyze = int(sys.argv[1])
-dataset_csv = sys.argv[2]
+# ###### INPUT #######
 
-vocab = file('./cro_vocab.txt').readlines()
+if sys.argv[1] in ['-h', '--help']:
+    print(usage)
+    exit()
+else:
+    dataset_dir = sys.argv[1]
 
-olda = onlineldavb.OnlineLDA(vocab,
-                             K=30,
-                             D=no_of_docs_to_analyze,
-                             alpha=1. / topic_number,
-                             eta=1. / topic_number,
-                             tau0=1024,
-                             kappa=0.75
-                             )
+try:
+    no_of_docs_to_analyze = int(sys.argv[2])
+except ValueError:
+    no_of_docs_to_analyze = None  # analyze the whole dataset
+    vocab_txt = sys.argv[2]
+except IndexError:
+    no_of_docs_to_analyze = None
 
-documents = []
-with open(dataset_csv, 'r') as f:
-    f.readline()  # read the header to get rid of it
-    for i in range(no_of_docs_to_analyze):
-        line = f.readline().split(';')
-        documents.append(line[1])  # fetch only the transcript
+try:
+    vocab_txt = sys.argv[3]
+except IndexError:
+    vocab_txt = './cro_vocab.txt'
 
-for iteration in range(0, no_of_docs_to_analyze):
-    gamma, bound = olda.update_lambda_docs(documents)
-    wordids, wordcts = onlineldavb.parse_doc_list(documents, olda._vocab)
+with open(vocab_txt, 'r') as f:
+    vocab = f.readlines()
 
-    perwordbound = bound * len(documents) / (no_of_docs_to_analyze * sum(map(sum, wordcts)))
-    print '%d:  rho_t = %f,  held-out perplexity estimate = %f' % \
-                (iteration, olda._rhot, numpy.exp(-perwordbound))
-    if (iteration % 10 == 0):
-        numpy.savetxt('lambda-%d.dat' % iteration, olda._lambda)
-        numpy.savetxt('gamma-%d.dat' % iteration, gamma)
+vocab = [word.decode('utf-8').strip() for word in vocab]
+
+corpus = get_corpus_csvs(dataset_dir)
+
+
+if no_of_docs_to_analyze is None:
+    no_of_docs_to_analyze = get_corpus_size(corpus)
+
+# ###### LDA #######
+
+# olda = onlineldavb.OnlineLDA(vocab,
+#                              K=topic_number,
+#                              D=no_of_docs_to_analyze,
+#                              alpha=1. / topic_number,  # uniform Dirichlet prior parameter: per-document topic mixture
+#                              eta=1. / topic_number,  # uniform Dirichlet prior parameter: per-corpus topic mixture
+#                              tau0=1024,  # positive learning parameter that downweights early iterations
+#                              kappa=0.75  # learning rate
+#                              )
+
+documents = {}  # dictionary of file-granularity list of individual statements
+print(corpus)
+for csv in corpus:
+    print("Reading CSV {}...".format(csv))
+    with open(csv, 'r') as input_csv:
+        lines = [line.strip() for line in input_csv.readlines()]
+
+    header = [column[1:-1] for column in lines[0].split(';')]  # get header and strip quotation marks
+    lines = lines[1:]  # drop the header
+
+    documents[csv] = []
+    line_no = 0
+    for line in lines:
+        line = line.split(';')
+        doc = {}
+        for i in range(len(header)):
+            if header[i] == "Transkript":
+                line[i] = cro_stem.stem_document(line[i])
+            doc[header[i]] = line[i]
+        documents[csv].append(doc)
+        sys.stdout.write("\r{}".format(line_no))
+        sys.stdout.flush()
+        line_no += 1
+
+    sys.stdout.write("\r")
+    # sys.stdout.flush()
+
+    pickle_path = os.path.join(pickle_dir, os.path.basename(csv))
+
+    with open(pickle_path, 'wb') as pick:
+        pickle.dump(documents[csv], pick)
+
+print(documents)
+# for iteration in range(0, no_of_docs_to_analyze):
+#     gamma, bound = olda.update_lambda_docs(documents)
+#     wordids, wordcts = onlineldavb.parse_doc_list(documents, olda._vocab)
+
+#     perwordbound = bound * len(documents) / (no_of_docs_to_analyze * sum(map(sum, wordcts)))
+#     print '%d:  rho_t = %f,  held-out perplexity estimate = %f' % \
+#                 (iteration, olda._rhot, numpy.exp(-perwordbound))
+#     if (iteration % 10 == 0):
+#         numpy.savetxt('lambda-%d.dat' % iteration, olda._lambda)
+#         numpy.savetxt('gamma-%d.dat' % iteration, gamma)
