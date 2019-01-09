@@ -1,7 +1,22 @@
-#!/usr/bin/python
-import wikipedia, re
-from sys import stderr
+#!/usr/bin/python2
+import wikipedia
+import re
+# from sys import stderr
 
+
+def get_stop_words(stop_file):
+    stop_words = []
+    with open(stop_file, "r") as f:
+        content = f.read().decode('iso8859_2').encode('utf-8').split('\r\n')
+        for line in content:
+            if len(line) == 0:
+                continue
+            if line[0] != ';':
+                stop_words.append(line.split(';')[0].strip())
+    return stop_words
+
+
+stop_file = 'hrvatski_stoprijeci.txt'
 
 wikipedia.set_lang("hr")
 titles_seed = ["Hrvatski sabor",
@@ -42,17 +57,9 @@ for title in titles_extra:
         continue
     pages.append(page)
 
-stop_words = []
-with open("hrvatski_stoprijeci.txt", "r") as f:
-    content = f.read().decode('iso8859_2').encode('utf-8').split('\r\n')
-    for line in content:
-        if len(line) == 0:
-            continue
-        if line[0] != ';':
-            stop_words.append(line)
-
-for stop_word in stop_words:
-    stderr.write(stop_word + '\n')
+stop_words = get_stop_words(stop_file)
+# for stop_word in stop_words:
+#     stderr.write(stop_word + '\n')
 
 with open("cro_vocab.txt", "w") as f:
     for page in pages:
