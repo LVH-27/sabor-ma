@@ -86,13 +86,12 @@ if no_of_docs_to_analyze is None:
 #                              )
 
 documents = {}  # dictionary of file-granularity list of individual statements
-print(corpus)
 for csv in corpus:
     print("Reading CSV {}...".format(csv))
     with open(csv, 'r') as input_csv:
         lines = [line.strip() for line in input_csv.readlines()]
 
-    header = [column[1:-1] for column in lines[0].split(';')]  # get header and strip quotation marks
+    header = [column.strip('\"') for column in lines[0].split(';')]  # get header and strip quotation marks
     lines = lines[1:]  # drop the header
 
     documents[csv] = []
@@ -103,21 +102,28 @@ for csv in corpus:
         for i in range(len(header)):
             if header[i] == "Transkript":
                 line[i] = cro_stem.stem_document(line[i])
-            doc[header[i]] = line[i]
+                doc[header[i]] = line[i]
+            else:
+                doc[header[i]] = line[i].strip('\"')
         documents[csv].append(doc)
         sys.stdout.write("\r{}".format(line_no))
         sys.stdout.flush()
         line_no += 1
 
     sys.stdout.write("\r")
-    # sys.stdout.flush()
 
     pickle_path = os.path.join(pickle_dir, os.path.basename(csv))
 
     with open(pickle_path, 'wb') as pick:
         pickle.dump(documents[csv], pick)
 
-print(documents)
+for doc in documents:
+    for entry in documents[doc][:10]:
+        for field in header:
+            print("{}: {}".format(field, entry[field]))
+        print("")
+    break
+
 # for iteration in range(0, no_of_docs_to_analyze):
 #     gamma, bound = olda.update_lambda_docs(documents)
 #     wordids, wordcts = onlineldavb.parse_doc_list(documents, olda._vocab)
