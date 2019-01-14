@@ -4,9 +4,9 @@
 import sys
 import os
 import re
-import croatian_stemmer as cro_stem
+from preprocessing import croatian_stemmer as cro_stem
 import pickle
-# import onlineldavb
+from onlineldavb import onlineldavb as lda
 # import random
 # import time
 # import pprint
@@ -74,16 +74,7 @@ corpus = get_corpus_csvs(dataset_dir)
 if no_of_docs_to_analyze is None:
     no_of_docs_to_analyze = get_corpus_size(corpus)
 
-# ###### LDA #######
-
-# olda = onlineldavb.OnlineLDA(vocab,
-#                              K=topic_number,
-#                              D=no_of_docs_to_analyze,
-#                              alpha=1. / topic_number,  # uniform Dirichlet prior parameter: per-document topic mixture
-#                              eta=1. / topic_number,  # uniform Dirichlet prior parameter: per-corpus topic mixture
-#                              tau0=1024,  # positive learning parameter that downweights early iterations
-#                              kappa=0.75  # learning rate
-#                              )
+# ###### CORPUS READING #######
 
 documents = {}  # dictionary of file-granularity list of individual statements
 for csv in corpus:
@@ -123,6 +114,18 @@ for doc in documents:
             print("{}: {}".format(field, entry[field]))
         print("")
     break
+
+# ###### LDA #######
+
+olda = lda.OnlineLDA(vocab,
+                     K=topic_number,
+                     D=no_of_docs_to_analyze,
+                     alpha=1. / topic_number,  # uniform Dirichlet prior parameter: per-document topic mixture
+                     eta=1. / topic_number,  # uniform Dirichlet prior parameter: per-corpus topic mixture
+                     tau0=1024,  # positive learning parameter that downweights early iterations
+                     kappa=0.75  # learning rate
+                     )
+
 
 # for iteration in range(0, no_of_docs_to_analyze):
 #     gamma, bound = olda.update_lambda_docs(documents)

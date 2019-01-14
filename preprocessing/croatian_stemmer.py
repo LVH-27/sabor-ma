@@ -19,7 +19,7 @@
 
 import re
 import sys
-import os
+import pkg_resources as pkg
 
 
 def istakniSlogotvornoR(niz):
@@ -33,32 +33,41 @@ def imaSamoglasnik(niz):
         return True
 
 
-def transformiraj(pojavnica):
-    for trazi, zamijeni in transformations:
-        if pojavnica.endswith(trazi):
-            return pojavnica[:-len(trazi)]+zamijeni
-    return pojavnica
+def transform(token):
+    for source_word, transformed_word in transformations:
+        if token.endswith(source_word):
+            return token[:-len(source_word)]+transformed_word
+    return token
 
 
-def korjenuj(pojavnica):
+def stem_token(token):
     for pravilo in rules:
-        dioba = pravilo.match(pojavnica)
+        dioba = pravilo.match(token)
         if dioba is not None:
             if imaSamoglasnik(dioba.group(1)) and len(dioba.group(1)) > 1:
                 return dioba.group(1)
-    return pojavnica
+    return token
 
 
-def get_stop_words(stop_file):
+def get_stop_words(stop_stream):
     stop_words = []
-    with open(stop_file, "r") as f:
-        content = f.read().decode('iso8859_2').encode('utf-8').split('\r\n')
-        for line in content:
-            if len(line) == 0:
-                continue
-            if line[0] != ';':
-                stop_words.append(line.split(';')[0].strip())
+    content = stop_stream.read().decode('iso8859_2').encode('utf-8').split('\r\n')
+
+    for line in content:
+        if len(line) == 0:
+            continue
+        if line[0] != ';':
+            stop_words.append(line.split(';')[0].strip())
     return [stop.decode('utf-8') for stop in stop_words]
+
+
+def get_rule(rule_stream):
+    return [re.compile(r'^('+osnova+')('+nastavak+r')$') for osnova, nastavak in
+            [e.decode('utf8').strip().split(' ') for e in rule_stream]]
+
+
+def get_transformations(transformation_stream):
+    return [e.decode('utf8').strip().split('\t') for e in transformation_stream]
 
 
 def stem_document(document, keep_stop_words=False):
@@ -68,7 +77,7 @@ def stem_document(document, keep_stop_words=False):
             if keep_stop_words:
                 stemmed.append(token.lower().encode('utf8'))
             continue
-        stemmed.append(korjenuj(transformiraj(token.lower())).encode('utf8'))
+        stemmed.append(stem_token(transform(token.lower())).encode('utf8'))
     return stemmed
 
 
@@ -81,32 +90,38 @@ if __name__ == '__main__':
 
     output_file = open(sys.argv[2], 'w')
 
-    stop_file = sys.argv[3]
-    stop = get_stop_words(stop_file)
+    stop_path = sys.argv[3]
+    with open(stop_path, 'r') as stop_stream:
+        stop = get_stop_words(stop_stream)
 
-    rules = [re.compile(r'^('+osnova+')('+nastavak+r')$') for osnova, nastavak in
-             [e.decode('utf8').strip().split(' ') for e in open('rules.txt')]]
+    rule = [re.compile(r'^('+osnova+')('+nastavak+r')$') for osnova, nastavak in
+            [e.decode('utf8').strip().split(' ') for e in open('rule.txt')]]
     transformations = [e.decode('utf8').strip().split('\t') for e in open('transformations.txt')]
 
     for token in re.findall(r'\w+', open(sys.argv[1]).read().decode('utf8'), re.UNICODE):
         if token.lower() in stop:
             output_file.write((token+'\t'+token.lower()+'\n').encode('utf8'))
             continue
-        output_file.write((token+'\t'+korjenuj(transformiraj(token.lower()))+'\n').encode('utf8'))
+        output_file.write((token+'\t'+stem_token(transform(token.lower()))+'\n').encode('utf8'))
     output_file.close()
 
 else:
     stem_dir = 'cro_stem'
 
-    stop_file = os.path.join(stem_dir, 'hrvatski_stoprijeci.txt')
-    rule_file = os.path.join(stem_dir, 'rules.txt')
-    transformation_file = os.path.join(stem_dir, 'transformations.txt')
+    resource_package = __name__
 
-    stop = get_stop_words(stop_file)
+    stop_path = '/'.join((stem_dir, 'hrvatski_stoprijeci.txt'))
+    rule_path = '/'.join((stem_dir, 'rules.txt'))
+    transformation_path = '/'.join((stem_dir, 'transformations.txt'))
 
-    with open(rule_file, 'r') as rules_f:
-        rules = [re.compile(r'^('+osnova+')('+nastavak+r')$') for osnova, nastavak in
-                 [e.decode('utf8').strip().split(' ') for e in rules_f]]
+    stop_stream = pkg.resource_stream(resource_package, stop_path)
+    stop = get_stop_words(stop_stream)
+    stop_stream.close()
 
-    with open(transformation_file, 'r') as trans_f:
-        transformations = [e.decode('utf8').strip().split('\t') for e in trans_f]
+    rule_stream = pkg.resource_stream(resource_package, rule_path)
+    rules = get_rule(rule_stream)
+    rule_stream.close()
+
+    transformation_stream = pkg.resource_stream(resource_package, transformation_path)
+    transformations = get_transformations(transformation_stream)
+    transformation_stream.close()
