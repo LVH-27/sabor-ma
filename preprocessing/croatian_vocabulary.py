@@ -1,6 +1,7 @@
 #!/usr/bin/python2
 import wikipedia
 import re
+from croatian_stemmer import stem_token
 # from sys import stderr
 
 
@@ -67,11 +68,11 @@ with open("cro_vocab.txt", "w") as f:
         tokens = []
         for term in content:
             if "http" not in term:
-                token = term.split('.')[0].split(',')[0].split(')')[0].split(':')[0].lower()
+                token = term.strip('.').strip(',').strip(')').strip(':').strip('\'').strip('"').lower()
                 if '(' in token:
                     token = token.split('(')[1]
-                if token not in tokens and token not in stop_words and not re.search('[0-9]+', token):
-                    tokens.append(token)
+                if token not in tokens and token not in stop_words and not re.search('[0-9]+', token) and not re.search('\W', token):
+                    tokens.append(stem_token(token))
 
         for token in tokens:
             token_out = token + '\n'

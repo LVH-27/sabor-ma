@@ -41,11 +41,11 @@ def transform(token):
 
 
 def stem_token(token):
-    for pravilo in rules:
-        dioba = pravilo.match(token)
-        if dioba is not None:
-            if imaSamoglasnik(dioba.group(1)) and len(dioba.group(1)) > 1:
-                return dioba.group(1)
+    for rule in rules:
+        rule_match = rule.match(token)
+        if rule_match is not None:
+            if imaSamoglasnik(rule_match.group(1)) and len(rule_match.group(1)) > 1:
+                return rule_match.group(1)
     return token
 
 
@@ -94,7 +94,7 @@ if __name__ == '__main__':
     with open(stop_path, 'r') as stop_stream:
         stop = get_stop_words(stop_stream)
 
-    rule = [re.compile(r'^('+osnova+')('+nastavak+r')$') for osnova, nastavak in
+    rules = [re.compile(r'^('+osnova+')('+nastavak+r')$') for osnova, nastavak in
             [e.decode('utf8').strip().split(' ') for e in open('rule.txt')]]
     transformations = [e.decode('utf8').strip().split('\t') for e in open('transformations.txt')]
 

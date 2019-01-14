@@ -6,12 +6,14 @@ import os
 import re
 from preprocessing import croatian_stemmer as cro_stem
 import pickle
-from onlineldavb import onlineldavb as lda
+# from onlineldavb import onlineldavb
+import numpy
+import logging
+import gensim
 # import random
 # import time
 # import pprint
 # import string
-# import numpy
 # import getopt
 
 
@@ -19,6 +21,8 @@ usage = """
 This script performs LDA on Croatian Parliament discussion transcripts. Usage:\n
 \tpython {} dataset_csv_directory [number of documents to analyze] [croatian vocabulary file]
 """.format(sys.argv[0])
+
+logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
 
 def get_corpus_csvs(dataset_dir):
@@ -39,7 +43,7 @@ def get_corpus_size(corpus):
 
 
 batch_size = 64
-topic_number = 15
+topic_number = 5
 pickle_dir = 'pickles'
 
 # ###### INPUT #######
@@ -108,32 +112,35 @@ for csv in corpus:
     with open(pickle_path, 'wb') as pick:
         pickle.dump(documents[csv], pick)
 
+transcripts = []
 for doc in documents:
     for entry in documents[doc][:10]:
-        for field in header:
-            print("{}: {}".format(field, entry[field]))
-        print("")
+        # for field in header:
+        #     print("{}: {}".format(field, entry[field]))
+        # print("")
+        transcripts.append(' '.join(entry["Transkript"]))
     break
 
 # ###### LDA #######
 
-olda = lda.OnlineLDA(vocab,
-                     K=topic_number,
-                     D=no_of_docs_to_analyze,
-                     alpha=1. / topic_number,  # uniform Dirichlet prior parameter: per-document topic mixture
-                     eta=1. / topic_number,  # uniform Dirichlet prior parameter: per-corpus topic mixture
-                     tau0=1024,  # positive learning parameter that downweights early iterations
-                     kappa=0.75  # learning rate
-                     )
+olda = onlineldavb.OnlineLDA(vocab,
+                             K=topic_number,
+                             D=no_of_docs_to_analyze,
+                             alpha=1. / topic_number,  # uniform Dirichlet prior parameter: per-document topic mixture
+                             eta=1. / topic_number,  # uniform Dirichlet prior parameter: per-corpus topic mixture
+                             tau0=1024,  # positive learning parameter that downweights early iterations
+                             kappa=0.75  # learning rate
+                             )
 
+# print(transcripts)
+out_dir = 'out'
+for iteration in range(0, no_of_docs_to_analyze):
+    gamma, bound = olda.update_lambda_docs(transcripts)
+    wordids, wordcts = onlineldavb.parse_doc_list(transcripts, olda._vocab)
 
-# for iteration in range(0, no_of_docs_to_analyze):
-#     gamma, bound = olda.update_lambda_docs(documents)
-#     wordids, wordcts = onlineldavb.parse_doc_list(documents, olda._vocab)
+    perwordbound = bound * len(transcripts) / (no_of_docs_to_analyze * sum(map(sum, wordcts)))
+    print('{}:  rho_t = {},  held-out perplexity estimate = {}'.format(iteration, olda._rhot, numpy.exp(-perwordbound)))
+    if (iteration % 10 == 0):
+        numpy.savetxt(os.path.join(out_dir, 'lambda-%d.dat') % iteration, olda._lambda)
+        numpy.savetxt(os.path.join(out_dir, 'gamma-%d.dat') % iteration, gamma)
 
-#     perwordbound = bound * len(documents) / (no_of_docs_to_analyze * sum(map(sum, wordcts)))
-#     print '%d:  rho_t = %f,  held-out perplexity estimate = %f' % \
-#                 (iteration, olda._rhot, numpy.exp(-perwordbound))
-#     if (iteration % 10 == 0):
-#         numpy.savetxt('lambda-%d.dat' % iteration, olda._lambda)
-#         numpy.savetxt('gamma-%d.dat' % iteration, gamma)
