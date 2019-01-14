@@ -6,10 +6,10 @@ import os
 import re
 from preprocessing import croatian_stemmer as cro_stem
 import pickle
-# from onlineldavb import onlineldavb
+from onlineldavb import onlineldavb
 import numpy
-import logging
-import gensim
+# import logging
+# import gensim
 # import random
 # import time
 # import pprint
@@ -22,7 +22,7 @@ This script performs LDA on Croatian Parliament discussion transcripts. Usage:\n
 \tpython {} dataset_csv_directory [number of documents to analyze] [croatian vocabulary file]
 """.format(sys.argv[0])
 
-logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+# logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
 
 def get_corpus_csvs(dataset_dir):
