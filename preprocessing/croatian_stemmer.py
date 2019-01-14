@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 #-*-coding:utf-8-*-
 #
 #    Simple stemmer for Croatian v0.1
@@ -51,33 +51,33 @@ def stem_token(token):
 
 def get_stop_words(stop_stream):
     stop_words = []
-    content = stop_stream.read().decode('iso8859_2').encode('utf-8').split('\r\n')
+    content = stop_stream.read().decode('iso8859_2').split('\r\n')
 
     for line in content:
         if len(line) == 0:
             continue
         if line[0] != ';':
             stop_words.append(line.split(';')[0].strip())
-    return [stop.decode('utf-8') for stop in stop_words]
+    return [stop for stop in stop_words]
 
 
 def get_rule(rule_stream):
     return [re.compile(r'^('+osnova+')('+nastavak+r')$') for osnova, nastavak in
-            [e.decode('utf8').strip().split(' ') for e in rule_stream]]
+            [e.strip().decode('utf-8').split(' ') for e in rule_stream]]
 
 
 def get_transformations(transformation_stream):
-    return [e.decode('utf8').strip().split('\t') for e in transformation_stream]
+    return [e.strip().decode('utf-8').split('\t') for e in transformation_stream]
 
 
 def stem_document(document, keep_stop_words=False):
     stemmed = []
-    for token in re.findall(r'\w+', document.decode('utf8'), re.UNICODE):
+    for token in re.findall(r'\w+', document, re.UNICODE):
         if token.lower() in stop:
             if keep_stop_words:
-                stemmed.append(token.lower().encode('utf8'))
+                stemmed.append(token.lower())
             continue
-        stemmed.append(stem_token(transform(token.lower())).encode('utf8'))
+        stemmed.append(stem_token(transform(token.lower())))
     return stemmed
 
 
@@ -91,14 +91,14 @@ if __name__ == '__main__':
     output_file = open(sys.argv[2], 'w')
 
     stop_path = sys.argv[3]
-    with open(stop_path, 'r') as stop_stream:
+    with open(stop_path, 'rb') as stop_stream:
         stop = get_stop_words(stop_stream)
 
     rules = [re.compile(r'^('+osnova+')('+nastavak+r')$') for osnova, nastavak in
-            [e.decode('utf8').strip().split(' ') for e in open('rule.txt')]]
-    transformations = [e.decode('utf8').strip().split('\t') for e in open('transformations.txt')]
+             [e.strip().split(' ') for e in open('rule.txt', 'rb')]]
+    transformations = [e.strip().split('\t') for e in open('transformations.txt', 'rb')]
 
-    for token in re.findall(r'\w+', open(sys.argv[1]).read().decode('utf8'), re.UNICODE):
+    for token in re.findall(r'\w+', open(sys.argv[1]).read(), re.UNICODE):
         if token.lower() in stop:
             output_file.write((token+'\t'+token.lower()+'\n').encode('utf8'))
             continue

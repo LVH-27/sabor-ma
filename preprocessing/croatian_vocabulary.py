@@ -68,7 +68,7 @@ with open("cro_vocab.txt", "w") as f:
         tokens = []
         for term in content:
             if "http" not in term:
-                token = term.strip('.').strip(',').strip(')').strip(':').strip('\'').strip('"').lower()
+                token = term.strip('.').strip(',').strip(')').strip(':').strip('\'').strip('"').strip().lower()
                 if '(' in token:
                     token = token.split('(')[1]
                 if token not in tokens and token not in stop_words and not re.search('[0-9]+', token) and not re.search('\W', token):

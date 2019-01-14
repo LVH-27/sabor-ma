@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 import sys
@@ -6,15 +6,10 @@ import os
 import re
 from preprocessing import croatian_stemmer as cro_stem
 import pickle
-from onlineldavb import onlineldavb
-import numpy
-# import logging
-# import gensim
-# import random
-# import time
-# import pprint
-# import string
-# import getopt
+import logging
+import gensim
+from pprint import pprint
+from collections import Counter
 
 
 usage = """
@@ -22,7 +17,7 @@ This script performs LDA on Croatian Parliament discussion transcripts. Usage:\n
 \tpython {} dataset_csv_directory [number of documents to analyze] [croatian vocabulary file]
 """.format(sys.argv[0])
 
-# logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
 
 def get_corpus_csvs(dataset_dir):
@@ -67,10 +62,10 @@ try:
 except IndexError:
     vocab_txt = './cro_vocab.txt'
 
-with open(vocab_txt, 'r') as f:
-    vocab = f.readlines()
+# with open(vocab_txt, 'r') as f:
+#     vocab = f.readlines()
 
-vocab = [word.decode('utf-8').strip() for word in vocab]
+# vocab = [word.strip() for word in vocab]
 
 corpus = get_corpus_csvs(dataset_dir)
 
@@ -101,8 +96,9 @@ for csv in corpus:
             else:
                 doc[header[i]] = line[i].strip('\"')
         documents[csv].append(doc)
-        sys.stdout.write("\r{}".format(line_no))
-        sys.stdout.flush()
+        if line_no % 100 == 0:
+            sys.stdout.write("\r{}".format(line_no))
+            sys.stdout.flush()
         line_no += 1
 
     sys.stdout.write("\r")
@@ -118,29 +114,21 @@ for doc in documents:
         # for field in header:
         #     print("{}: {}".format(field, entry[field]))
         # print("")
-        transcripts.append(' '.join(entry["Transkript"]))
+        transcripts.append(entry["Transkript"])
     break
 
-# ###### LDA #######
+# ###### PREPROCESSING #######
+corpus_file = 'corpus.txt'
+if os.path.isfile(corpus_file):
+    gensim_corpus = gensim.corpora.dictionary.Dictionary.load(corpus_file)
+else:
+    freq = Counter()
 
-olda = onlineldavb.OnlineLDA(vocab,
-                             K=topic_number,
-                             D=no_of_docs_to_analyze,
-                             alpha=1. / topic_number,  # uniform Dirichlet prior parameter: per-document topic mixture
-                             eta=1. / topic_number,  # uniform Dirichlet prior parameter: per-corpus topic mixture
-                             tau0=1024,  # positive learning parameter that downweights early iterations
-                             kappa=0.75  # learning rate
-                             )
+    for transcript in transcripts:
+        for token in transcript:
+            freq[token] += 1
 
-# print(transcripts)
-out_dir = 'out'
-for iteration in range(0, no_of_docs_to_analyze):
-    gamma, bound = olda.update_lambda_docs(transcripts)
-    wordids, wordcts = onlineldavb.parse_doc_list(transcripts, olda._vocab)
-
-    perwordbound = bound * len(transcripts) / (no_of_docs_to_analyze * sum(map(sum, wordcts)))
-    print('{}:  rho_t = {},  held-out perplexity estimate = {}'.format(iteration, olda._rhot, numpy.exp(-perwordbound)))
-    if (iteration % 10 == 0):
-        numpy.savetxt(os.path.join(out_dir, 'lambda-%d.dat') % iteration, olda._lambda)
-        numpy.savetxt(os.path.join(out_dir, 'gamma-%d.dat') % iteration, gamma)
-
+    transcripts = [[token for token in transcript if freq[token] > 1] for transcript in transcripts]  # drop words occurring only once
+    gensim_corpus = gensim.corpora.dictionary.Dictionary(transcripts)
+    gensim_corpus.save(corpus_file)
+pprint(gensim_corpus)
