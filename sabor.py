@@ -38,7 +38,7 @@ def get_corpus_size(corpus):
 
 
 batch_size = 64
-topic_number = 10
+topic_number = 8
 pickle_dir = 'pickles'
 
 # ###### INPUT #######
@@ -77,36 +77,40 @@ if no_of_docs_to_analyze is None:
 
 documents = {}  # dictionary of file-granularity list of individual statements
 for csv in corpus:
-    print("Reading CSV {}...".format(csv))
-    with open(csv, 'r') as input_csv:
-        lines = [line.strip() for line in input_csv.readlines()]
-
-    header = [column.strip('\"') for column in lines[0].split(';')]  # get header and strip quotation marks
-    lines = lines[1:]  # drop the header
-
-    documents[csv] = []
-    line_no = 0
-    for line in lines:
-        line = line.split(';')
-        doc = {}
-        for i in range(len(header)):
-            if header[i] == "Transkript":
-                line[i] = cro_stem.stem_document(line[i])
-                doc[header[i]] = line[i]
-            else:
-                doc[header[i]] = line[i].strip('\"')
-        documents[csv].append(doc)
-        if line_no % 100 == 0:
-            sys.stdout.write("\r{}".format(line_no))
-            sys.stdout.flush()
-        line_no += 1
-
-    sys.stdout.write("\r")
-
     pickle_path = os.path.join(pickle_dir, os.path.basename(csv))
+    try:
+        with open(pickle_path, 'rb') as pick:
+            print("File {} found - loading CSV {}".format(pickle_path, csv))
+            documents[csv] = pickle.load(pick)
+    except FileNotFoundError as e:
+        print("File {} not found - reading CSV {}...".format(pickle_path, csv))
+        with open(csv, 'r') as input_csv:
+            lines = [line.strip() for line in input_csv.readlines()]
 
-    with open(pickle_path, 'wb') as pick:
-        pickle.dump(documents[csv], pick)
+        header = [column.strip('\"') for column in lines[0].split(';')]  # get header and strip quotation marks
+        lines = lines[1:]  # drop the header
+
+        documents[csv] = []
+        line_no = 0
+        for line in lines:
+            line = line.split(';')
+            doc = {}
+            for i in range(len(header)):
+                if header[i] == "Transkript":
+                    line[i] = cro_stem.stem_document(line[i])
+                    doc[header[i]] = line[i]
+                else:
+                    doc[header[i]] = line[i].strip('\"')
+            documents[csv].append(doc)
+            if line_no % 100 == 0:
+                sys.stdout.write("\r{}".format(line_no))
+                sys.stdout.flush()
+            line_no += 1
+
+        sys.stdout.write("\r")
+
+        with open(pickle_path, 'wb') as pick:
+            pickle.dump(documents[csv], pick)
 
 transcripts = []
 for doc in documents:
@@ -119,19 +123,23 @@ for doc in documents:
 
 # ###### PREPROCESSING #######
 corpus_file = 'corpus.txt'
-if os.path.isfile(corpus_file):
-    gensim_dict = gensim.corpora.dictionary.Dictionary.load(corpus_file)
-else:
-    freq = Counter()
 
-    for transcript in transcripts:
-        for token in transcript:
-            freq[token] += 1
+freq = Counter()
 
-    # drop words occurring only once
-    transcripts = [[token for token in transcript if freq[token] > 1] for transcript in transcripts]
-    gensim_dict = gensim.corpora.dictionary.Dictionary(transcripts)
-    gensim_dict.save(corpus_file)
+for transcript in transcripts:
+    for token in transcript:
+        freq[token] += 1
+
+# drop words occurring only once
+transcripts = [[token for token in transcript if freq[token] > 1] for transcript in transcripts]
+gensim_dict = gensim.corpora.dictionary.Dictionary(transcripts)
+
+print(len(gensim_dict.token2id))
+# gensim_dict.filter_extremes(no_below=0, no_above=0.2, keep_n=None)
+gensim_dict.filter_n_most_frequent(int(len(gensim_dict.token2id) * 0.1))
+print(len(gensim_dict.token2id))
+gensim_dict.save(corpus_file)
+
 
 gensim_corpus = [gensim_dict.doc2bow(transcript) for transcript in transcripts]
 gensim.corpora.MmCorpus.serialize('/tmp/sabor.mm', gensim_corpus)
@@ -159,9 +167,10 @@ pickle_path = os.path.join(pickle_dir, 'lda_{}'.format(topic_number))
 print("Saving the LDA model to {}...".format(pickle_dir))
 lda.save(pickle_path)
 
-topics = lda.show_topics(10)
-for topic in topics:
-    print("Topic #{}:".format(topic[0]))
-    print("\t{}".format(topic[1]))
+topics = lda.show_topics(topic_number)
+with open("topics.out", "w") as f:
+    for topic in topics:
+        f.write("Topic #{}:\n".format(topic[0]))
+        f.write("\t{}\n".format(topic[1]))
 # with open("topics.out", "w") as f:
 #     f.write('\n'.join(lda.print_topics()))
