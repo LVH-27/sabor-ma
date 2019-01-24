@@ -17,7 +17,7 @@ This script performs LDA on Croatian Parliament discussion transcripts. Usage:\n
 \tpython {} dataset_csv_directory [number of documents to analyze] [croatian vocabulary file]
 """.format(sys.argv[0])
 
-logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+# logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
 
 def get_corpus_csvs(dataset_dir):
@@ -38,7 +38,7 @@ def get_corpus_size(corpus):
 
 
 batch_size = 64
-topic_number = 5
+topic_number = 10
 pickle_dir = 'pickles'
 
 # ###### INPUT #######
@@ -110,7 +110,7 @@ for csv in corpus:
 
 transcripts = []
 for doc in documents:
-    for entry in documents[doc][:10]:
+    for entry in documents[doc]:
         # for field in header:
         #     print("{}: {}".format(field, entry[field]))
         # print("")
@@ -120,7 +120,7 @@ for doc in documents:
 # ###### PREPROCESSING #######
 corpus_file = 'corpus.txt'
 if os.path.isfile(corpus_file):
-    gensim_corpus = gensim.corpora.dictionary.Dictionary.load(corpus_file)
+    gensim_dict = gensim.corpora.dictionary.Dictionary.load(corpus_file)
 else:
     freq = Counter()
 
@@ -128,7 +128,40 @@ else:
         for token in transcript:
             freq[token] += 1
 
-    transcripts = [[token for token in transcript if freq[token] > 1] for transcript in transcripts]  # drop words occurring only once
-    gensim_corpus = gensim.corpora.dictionary.Dictionary(transcripts)
-    gensim_corpus.save(corpus_file)
-pprint(gensim_corpus)
+    # drop words occurring only once
+    transcripts = [[token for token in transcript if freq[token] > 1] for transcript in transcripts]
+    gensim_dict = gensim.corpora.dictionary.Dictionary(transcripts)
+    gensim_dict.save(corpus_file)
+
+gensim_corpus = [gensim_dict.doc2bow(transcript) for transcript in transcripts]
+gensim.corpora.MmCorpus.serialize('/tmp/sabor.mm', gensim_corpus)
+
+mm_corpus = gensim.corpora.MmCorpus('/tmp/sabor.mm')
+
+# ###### LDA #######
+
+pickle_path = os.path.join(pickle_dir, 'lda_{}'.format(topic_number))
+
+# if os.path.isfile(pickle_path):
+#     print("Loading LDA model from {}...".format(pickle_path))
+#     lda = gensim.models.ldamodel.LdaModel.load(pickle_path)
+
+# else:
+print("Training the LDA model...")
+lda = gensim.models.ldamodel.LdaModel(corpus=mm_corpus,
+                                      id2word=gensim_dict,
+                                      num_topics=topic_number,
+                                      update_every=100,
+                                      passes=1
+                                      )
+
+pickle_path = os.path.join(pickle_dir, 'lda_{}'.format(topic_number))
+print("Saving the LDA model to {}...".format(pickle_dir))
+lda.save(pickle_path)
+
+topics = lda.show_topics(10)
+for topic in topics:
+    print("Topic #{}:".format(topic[0]))
+    print("\t{}".format(topic[1]))
+# with open("topics.out", "w") as f:
+#     f.write('\n'.join(lda.print_topics()))
