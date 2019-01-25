@@ -221,9 +221,18 @@ for speaker in speakers:
         idx += 1
 speakers_y = [speaker_class_map[speaker] for speaker in speakers]
 
-style = StyleClassifier()
-print("Training classifier...")
-style.fit(transcripts, speakers_y)
+pickle_path = os.path.join(args.pickle_dir, os.path.basename(csv) + ".clf")
+try:
+    with open(pickle_path, 'rb') as pick:
+        print("File {} found - loading classifier".format(pickle_path))
+        style = pickle.load(pick)
+except FileNotFoundError as e:
+    style = StyleClassifier()
+    print("Training classifier...")
+    style.fit(transcripts, speakers_y)
+
+    with open(pickle_path, 'wb') as pick:
+        pickle.dump(style, pick)
 
 pprint(speaker_class_map)
 pprint(style.predict(transcripts[:10]))
