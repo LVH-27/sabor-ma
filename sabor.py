@@ -214,8 +214,8 @@ for doc in documents:
 
 speaker_class_map = {}
 # transform speakers to numeric classes
+idx = 0
 for speaker in speakers:
-    idx = 0
     if speaker not in speaker_class_map:
         speaker_class_map[speaker] = idx
         idx += 1
