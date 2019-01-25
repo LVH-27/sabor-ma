@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
+import argparse
 import sys
 import os
 import re
@@ -10,14 +11,6 @@ import logging
 import gensim
 from pprint import pprint
 from collections import Counter
-
-
-usage = """
-This script performs LDA on Croatian Parliament discussion transcripts. Usage:\n
-\tpython {} dataset_csv_directory [number of documents to analyze] [croatian vocabulary file]
-""".format(sys.argv[0])
-
-# logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
 
 def get_corpus_csvs(dataset_dir):
@@ -37,51 +30,57 @@ def get_corpus_size(corpus):
     return size
 
 
-batch_size = 64
-topic_number = 8
-pickle_dir = 'pickles'
-
 # ###### INPUT #######
 
-if sys.argv[1] in ['-h', '--help']:
-    print(usage)
-    exit()
-else:
-    dataset_dir = sys.argv[1]
+usage = """
+This script performs LDA on Croatian Parliament discussion transcripts. Usage:\n
+\tpython {} dataset_csv_directory [number of documents to analyze] [croatian vocabulary file]
+""".format(sys.argv[0])
+parser = argparse.ArgumentParser(description=usage)
+parser.add_argument("-d", "--dataset-dir",
+                    help='path to the directory containing the dataset (a set of CSV files)',
+                    required=True,
+                    type=str)
+parser.add_argument("-v", "--vocabulary",
+                    help='path to vocabulary file',
+                    type=str)
+parser.add_argument("-n", "--numdocs",
+                    help='total number of documents (CSV entries) to be processed; defaults to whole corpus',
+                    type=int)
+parser.add_argument("-b", "--batch-size",
+                    help='batch size while training the topic model; defaults to 64',
+                    type=int)
+parser.add_argument("-t", "--topic-number",
+                    help='number of topics to detect',
+                    required=True,
+                    type=int)
+parser.add_argument("-p", "--pickle-dir",
+                    help='path to directory to which program-specific pickles will be stored; defaults to ./pickles',
+                    type=int)
 
-try:
-    no_of_docs_to_analyze = int(sys.argv[2])
-except ValueError:
-    no_of_docs_to_analyze = None  # analyze the whole dataset
-    vocab_txt = sys.argv[2]
-except IndexError:
-    no_of_docs_to_analyze = None
+args = parser.parse_args()
 
-try:
-    vocab_txt = sys.argv[3]
-except IndexError:
-    vocab_txt = './cro_vocab.txt'
+corpus = get_corpus_csvs(args.dataset_dir)
+if not args.vocabulary:
+    args.vocabulary = './cro_vocab.txt'
+if not args.batch_size:
+    args.batch_size = 64
+if not args.pickle_dir:
+    args.pickle_dir = 'pickles'
+if args.numdocs is None:
+    args.numdocs = get_corpus_size(corpus)
 
-# with open(vocab_txt, 'r') as f:
-#     vocab = f.readlines()
-
-# vocab = [word.strip() for word in vocab]
-
-corpus = get_corpus_csvs(dataset_dir)
-
-
-if no_of_docs_to_analyze is None:
-    no_of_docs_to_analyze = get_corpus_size(corpus)
+# logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
 # ###### CORPUS READING #######
 
 documents = {}  # dictionary of file-granularity list of individual statements
 for csv in corpus:
-    pickle_path = os.path.join(pickle_dir, os.path.basename(csv))
+    pickle_path = os.path.join(args.pickle_dir, os.path.basename(csv))
     try:
         with open(pickle_path, 'rb') as pick:
             print("File {} found - loading CSV {}".format(pickle_path, csv))
-            documents[csv] = pickle.load(pick)
+            documents[csv] = pickle.load(pick, encoding='utf-8')
     except FileNotFoundError as e:
         print("File {} not found - reading CSV {}...".format(pickle_path, csv))
         with open(csv, 'r') as input_csv:
@@ -97,10 +96,11 @@ for csv in corpus:
             doc = {}
             for i in range(len(header)):
                 if header[i] == "Transkript":
-                    line[i] = cro_stem.stem_document(line[i])
-                    doc[header[i]] = line[i]
-                else:
-                    doc[header[i]] = line[i].strip('\"')
+                    # ###### STEMMING FOR LDA #######
+                    stemmed_transcript = cro_stem.stem_document(line[i])
+                    # ###### AS-IS FOR AUTHORSHIP ATTRIBUTION #######
+                    doc[header[i] + '_stemmed'] = stemmed_transcript
+                doc[header[i]] = line[i].strip('\"')
             documents[csv].append(doc)
             if line_no % 100 == 0:
                 sys.stdout.write("\r{}".format(line_no))
@@ -113,64 +113,58 @@ for csv in corpus:
             pickle.dump(documents[csv], pick)
 
 transcripts = []
+transcripts_stemmed = []
 for doc in documents:
     for entry in documents[doc]:
-        # for field in header:
-        #     print("{}: {}".format(field, entry[field]))
-        # print("")
         transcripts.append(entry["Transkript"])
-    break
-
-# ###### PREPROCESSING #######
-corpus_file = 'corpus.txt'
-
-freq = Counter()
-
-for transcript in transcripts:
-    for token in transcript:
-        freq[token] += 1
-
-# drop words occurring only once
-transcripts = [[token for token in transcript if freq[token] > 1] for transcript in transcripts]
-gensim_dict = gensim.corpora.dictionary.Dictionary(transcripts)
-
-print(len(gensim_dict.token2id))
-# gensim_dict.filter_extremes(no_below=0, no_above=0.2, keep_n=None)
-gensim_dict.filter_n_most_frequent(int(len(gensim_dict.token2id) * 0.1))
-print(len(gensim_dict.token2id))
-gensim_dict.save(corpus_file)
+        transcripts_stemmed.append(entry["Transkript_stemmed"])
 
 
-gensim_corpus = [gensim_dict.doc2bow(transcript) for transcript in transcripts]
-gensim.corpora.MmCorpus.serialize('/tmp/sabor.mm', gensim_corpus)
+def perform_lda(transcripts, topic_number, batch_size, load_if_existing=False):
+    corpus_file = 'corpus.txt'
 
-mm_corpus = gensim.corpora.MmCorpus('/tmp/sabor.mm')
+    freq = Counter()
 
-# ###### LDA #######
+    for transcript in transcripts:
+        for token in transcript:
+            freq[token] += 1
 
-pickle_path = os.path.join(pickle_dir, 'lda_{}'.format(topic_number))
+    # drop words occurring only once
+    transcripts = [[token for token in transcript if freq[token] > 1] for transcript in transcripts]
+    gensim_dict = gensim.corpora.dictionary.Dictionary(transcripts)
 
-# if os.path.isfile(pickle_path):
-#     print("Loading LDA model from {}...".format(pickle_path))
-#     lda = gensim.models.ldamodel.LdaModel.load(pickle_path)
+    gensim_dict.filter_n_most_frequent(int(len(gensim_dict.token2id) * 0.3))
+    gensim_dict.save(corpus_file)
 
-# else:
-print("Training the LDA model...")
-lda = gensim.models.ldamodel.LdaModel(corpus=mm_corpus,
-                                      id2word=gensim_dict,
-                                      num_topics=topic_number,
-                                      update_every=100,
-                                      passes=1
-                                      )
+    gensim_corpus = [gensim_dict.doc2bow(transcript) for transcript in transcripts]
+    gensim.corpora.MmCorpus.serialize('/tmp/sabor.mm', gensim_corpus)
 
-pickle_path = os.path.join(pickle_dir, 'lda_{}'.format(topic_number))
-print("Saving the LDA model to {}...".format(pickle_dir))
-lda.save(pickle_path)
+    mm_corpus = gensim.corpora.MmCorpus('/tmp/sabor.mm')
 
-topics = lda.show_topics(topic_number)
-with open("topics.out", "w") as f:
-    for topic in topics:
-        f.write("Topic #{}:\n".format(topic[0]))
-        f.write("\t{}\n".format(topic[1]))
-# with open("topics.out", "w") as f:
-#     f.write('\n'.join(lda.print_topics()))
+    # ###### LDA #######
+
+    pickle_path = os.path.join(args.pickle_dir, 'lda_t{}_b{}'.format(topic_number, batch_size))
+
+    if os.path.isfile(pickle_path) and load_if_existing:
+        print("Loading LDA model from {}...".format(pickle_path))
+        lda = gensim.models.ldamodel.LdaModel.load(pickle_path)
+
+    else:
+        print("Training the LDA model...")
+        lda = gensim.models.ldamodel.LdaModel(corpus=mm_corpus,
+                                              id2word=gensim_dict,
+                                              num_topics=topic_number,
+                                              update_every=batch_size,
+                                              passes=3
+                                              )
+
+        pickle_path = os.path.join(args.pickle_dir, 'lda_t{}_b{}'.format(topic_number, batch_size))
+        print("Saving the LDA model to {}...".format(pickle_path))
+        lda.save(pickle_path)
+
+    topics = lda.show_topics(args.topic_number, formatted=False)
+    with open("topics.out", "w") as f:
+        for topic in topics:
+            f.write("Topic #{}:\n".format(topic[0]))
+            for word in topic[1]:
+                f.write("\t{} - {}\n".format(word[0], word[1]))
